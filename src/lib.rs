@@ -18,8 +18,9 @@ mod ffi {
 }
 
 pub use ffi::{
-    Camera, Camera2D, Camera3D, Font, Image, KeyboardKey, Ray, RenderTexture2D, Shader, Texture2D,
-    VrDeviceInfo, VrStereoConfig, float3, float16,
+    AudioStream, BoundingBox, Camera, Camera2D, Camera3D, Font, Image, KeyboardKey, Material, Mesh,
+    Model, ModelAnimation, Music, NPatchInfo, Ray, RayCollision, RenderTexture2D, Shader, Sound,
+    Texture2D, TextureCubemap, VrDeviceInfo, VrStereoConfig, Wave, float3, float16,
 };
 
 //------------------------------------------------------------------------------------
@@ -1564,6 +1565,700 @@ pub fn GetCollisionRec(rec1: math::Rectangle, rec2: math::Rectangle) -> math::Re
 }
 
 //------------------------------------------------------------------------------------
+// Image loading functions
+//------------------------------------------------------------------------------------
+
+/// Load image from file into CPU memory (RAM)
+pub fn LoadImage(file_name: &str) -> Image {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    unsafe { ffi::LoadImage(file_name_c.as_ptr()) }
+}
+
+/// Load image from RAW file data
+pub fn LoadImageRaw(
+    file_name: &str,
+    width: i32,
+    height: i32,
+    format: i32,
+    header_size: i32,
+) -> Image {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    unsafe { ffi::LoadImageRaw(file_name_c.as_ptr(), width, height, format, header_size) }
+}
+
+/// Load image sequence from file (frames appended to image.data)
+pub fn LoadImageAnim(file_name: &str) -> (Image, i32) {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    let mut frames = 0;
+    let image = unsafe { ffi::LoadImageAnim(file_name_c.as_ptr(), &mut frames) };
+    (image, frames)
+}
+
+/// Load image sequence from memory buffer
+pub fn LoadImageAnimFromMemory(file_type: &str, file_data: &[u8]) -> (Image, i32) {
+    let file_type_c = CString::new(file_type).expect("CString::new failed");
+    let mut frames = 0;
+    let image = unsafe {
+        ffi::LoadImageAnimFromMemory(
+            file_type_c.as_ptr(),
+            file_data.as_ptr(),
+            file_data.len() as c_int,
+            &mut frames,
+        )
+    };
+    (image, frames)
+}
+
+/// Load image from memory buffer, fileType refers to extension: i.e. '.png'
+pub fn LoadImageFromMemory(file_type: &str, file_data: &[u8]) -> Image {
+    let file_type_c = CString::new(file_type).expect("CString::new failed");
+    unsafe {
+        ffi::LoadImageFromMemory(
+            file_type_c.as_ptr(),
+            file_data.as_ptr(),
+            file_data.len() as c_int,
+        )
+    }
+}
+
+/// Load image from GPU texture data
+pub fn LoadImageFromTexture(texture: Texture2D) -> Image {
+    unsafe { ffi::LoadImageFromTexture(texture) }
+}
+
+/// Load image from screen buffer (screenshot)
+pub fn LoadImageFromScreen() -> Image {
+    unsafe { ffi::LoadImageFromScreen() }
+}
+
+/// Check if an image is valid (data and parameters)
+pub fn IsImageValid(image: Image) -> bool {
+    unsafe { ffi::IsImageValid(image) }
+}
+
+/// Unload image from CPU memory (RAM)
+pub fn UnloadImage(image: Image) {
+    unsafe { ffi::UnloadImage(image) }
+}
+
+/// Export image data to file, returns true on success
+pub fn ExportImage(image: Image, file_name: &str) -> bool {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    unsafe { ffi::ExportImage(image, file_name_c.as_ptr()) }
+}
+
+/// Export image to memory buffer
+pub fn ExportImageToMemory(image: Image, file_type: &str) -> Vec<u8> {
+    let file_type_c = CString::new(file_type).expect("CString::new failed");
+    let mut file_size = 0;
+    unsafe {
+        let data_ptr = ffi::ExportImageToMemory(image, file_type_c.as_ptr(), &mut file_size);
+        let slice = std::slice::from_raw_parts(data_ptr, file_size as usize);
+        let vec = slice.to_vec();
+        ffi::MemFree(data_ptr as *mut c_void); // Free the C-allocated memory
+        vec
+    }
+}
+
+/// Export image as code file defining an array of bytes, returns true on success
+pub fn ExportImageAsCode(image: Image, file_name: &str) -> bool {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    unsafe { ffi::ExportImageAsCode(image, file_name_c.as_ptr()) }
+}
+
+//------------------------------------------------------------------------------------
+// Image generation functions
+//------------------------------------------------------------------------------------
+
+/// Generate image: plain color
+pub fn GenImageColor(width: i32, height: i32, color: color::Color) -> Image {
+    unsafe { ffi::GenImageColor(width, height, color) }
+}
+
+/// Generate image: linear gradient
+pub fn GenImageGradientLinear(
+    width: i32,
+    height: i32,
+    direction: i32,
+    start: color::Color,
+    end: color::Color,
+) -> Image {
+    unsafe { ffi::GenImageGradientLinear(width, height, direction, start, end) }
+}
+
+/// Generate image: radial gradient
+pub fn GenImageGradientRadial(
+    width: i32,
+    height: i32,
+    density: f32,
+    inner: color::Color,
+    outer: color::Color,
+) -> Image {
+    unsafe { ffi::GenImageGradientRadial(width, height, density, inner, outer) }
+}
+
+/// Generate image: square gradient
+pub fn GenImageGradientSquare(
+    width: i32,
+    height: i32,
+    density: f32,
+    inner: color::Color,
+    outer: color::Color,
+) -> Image {
+    unsafe { ffi::GenImageGradientSquare(width, height, density, inner, outer) }
+}
+
+/// Generate image: checked
+pub fn GenImageChecked(
+    width: i32,
+    height: i32,
+    checks_x: i32,
+    checks_y: i32,
+    col1: color::Color,
+    col2: color::Color,
+) -> Image {
+    unsafe { ffi::GenImageChecked(width, height, checks_x, checks_y, col1, col2) }
+}
+
+/// Generate image: white noise
+pub fn GenImageWhiteNoise(width: i32, height: i32, factor: f32) -> Image {
+    unsafe { ffi::GenImageWhiteNoise(width, height, factor) }
+}
+
+/// Generate image: perlin noise
+pub fn GenImagePerlinNoise(
+    width: i32,
+    height: i32,
+    offset_x: i32,
+    offset_y: i32,
+    scale: f32,
+) -> Image {
+    unsafe { ffi::GenImagePerlinNoise(width, height, offset_x, offset_y, scale) }
+}
+
+/// Generate image: cellular algorithm
+pub fn GenImageCellular(width: i32, height: i32, tile_size: i32) -> Image {
+    unsafe { ffi::GenImageCellular(width, height, tile_size) }
+}
+
+/// Generate image: grayscale image from text data
+pub fn GenImageText(width: i32, height: i32, text: &str) -> Image {
+    let text_c = CString::new(text).expect("CString::new failed");
+    unsafe { ffi::GenImageText(width, height, text_c.as_ptr()) }
+}
+
+//------------------------------------------------------------------------------------
+// Image manipulation functions
+//------------------------------------------------------------------------------------
+
+/// Create an image duplicate (useful for transformations)
+pub fn ImageCopy(image: Image) -> Image {
+    unsafe { ffi::ImageCopy(image) }
+}
+
+/// Create an image from another image piece
+pub fn ImageFromImage(image: Image, rec: math::Rectangle) -> Image {
+    unsafe { ffi::ImageFromImage(image, rec) }
+}
+
+/// Create an image from a selected channel of another image (GRAYSCALE)
+pub fn ImageFromChannel(image: Image, selected_channel: i32) -> Image {
+    unsafe { ffi::ImageFromChannel(image, selected_channel) }
+}
+
+/// Create an image from text (default font)
+pub fn ImageText(text: &str, font_size: i32, color: color::Color) -> Image {
+    let text_c = CString::new(text).expect("CString::new failed");
+    unsafe { ffi::ImageText(text_c.as_ptr(), font_size, color) }
+}
+
+/// Create an image from text (custom sprite font)
+pub fn ImageTextEx(
+    font: Font,
+    text: &str,
+    font_size: f32,
+    spacing: f32,
+    tint: color::Color,
+) -> Image {
+    let text_c = CString::new(text).expect("CString::new failed");
+    unsafe { ffi::ImageTextEx(font, text_c.as_ptr(), font_size, spacing, tint) }
+}
+
+/// Convert image data to desired format
+pub fn ImageFormat(image: &mut Image, new_format: i32) {
+    unsafe { ffi::ImageFormat(image, new_format) }
+}
+
+/// Convert image to POT (power-of-two)
+pub fn ImageToPOT(image: &mut Image, fill: color::Color) {
+    unsafe { ffi::ImageToPOT(image, fill) }
+}
+
+/// Crop an image to a defined rectangle
+pub fn ImageCrop(image: &mut Image, crop: math::Rectangle) {
+    unsafe { ffi::ImageCrop(image, crop) }
+}
+
+/// Crop image depending on alpha value
+pub fn ImageAlphaCrop(image: &mut Image, threshold: f32) {
+    unsafe { ffi::ImageAlphaCrop(image, threshold) }
+}
+
+/// Clear alpha channel to desired color
+pub fn ImageAlphaClear(image: &mut Image, color: color::Color, threshold: f32) {
+    unsafe { ffi::ImageAlphaClear(image, color, threshold) }
+}
+
+/// Apply alpha mask to image
+pub fn ImageAlphaMask(image: &mut Image, alpha_mask: Image) {
+    unsafe { ffi::ImageAlphaMask(image, alpha_mask) }
+}
+
+/// Premultiply alpha channel
+pub fn ImageAlphaPremultiply(image: &mut Image) {
+    unsafe { ffi::ImageAlphaPremultiply(image) }
+}
+
+/// Apply Gaussian blur using a box blur approximation
+pub fn ImageBlurGaussian(image: &mut Image, blur_size: i32) {
+    unsafe { ffi::ImageBlurGaussian(image, blur_size) }
+}
+
+/// Apply custom square convolution kernel to image
+pub fn ImageKernelConvolution(image: &mut Image, kernel: &[f32]) {
+    unsafe { ffi::ImageKernelConvolution(image, kernel.as_ptr(), kernel.len() as c_int) }
+}
+
+/// Resize image (Bicubic scaling algorithm)
+pub fn ImageResize(image: &mut Image, new_width: i32, new_height: i32) {
+    unsafe { ffi::ImageResize(image, new_width, new_height) }
+}
+
+/// Resize image (Nearest-Neighbor scaling algorithm)
+pub fn ImageResizeNN(image: &mut Image, new_width: i32, new_height: i32) {
+    unsafe { ffi::ImageResizeNN(image, new_width, new_height) }
+}
+
+/// Resize canvas and fill with color
+pub fn ImageResizeCanvas(
+    image: &mut Image,
+    new_width: i32,
+    new_height: i32,
+    offset_x: i32,
+    offset_y: i32,
+    fill: color::Color,
+) {
+    unsafe { ffi::ImageResizeCanvas(image, new_width, new_height, offset_x, offset_y, fill) }
+}
+
+/// Compute all mipmap levels for a provided image
+pub fn ImageMipmaps(image: &mut Image) {
+    unsafe { ffi::ImageMipmaps(image) }
+}
+
+/// Dither image data to 16bpp or lower (Floyd-Steinberg dithering)
+pub fn ImageDither(image: &mut Image, r_bpp: i32, g_bpp: i32, b_bpp: i32, a_bpp: i32) {
+    unsafe { ffi::ImageDither(image, r_bpp, g_bpp, b_bpp, a_bpp) }
+}
+
+/// Flip image vertically
+pub fn ImageFlipVertical(image: &mut Image) {
+    unsafe { ffi::ImageFlipVertical(image) }
+}
+
+/// Flip image horizontally
+pub fn ImageFlipHorizontal(image: &mut Image) {
+    unsafe { ffi::ImageFlipHorizontal(image) }
+}
+
+/// Rotate image by input angle in degrees (-359 to 359)
+pub fn ImageRotate(image: &mut Image, degrees: i32) {
+    unsafe { ffi::ImageRotate(image, degrees) }
+}
+
+/// Rotate image clockwise 90deg
+pub fn ImageRotateCW(image: &mut Image) {
+    unsafe { ffi::ImageRotateCW(image) }
+}
+
+/// Rotate image counter-clockwise 90deg
+pub fn ImageRotateCCW(image: &mut Image) {
+    unsafe { ffi::ImageRotateCCW(image) }
+}
+
+/// Modify image color: tint
+pub fn ImageColorTint(image: &mut Image, color: color::Color) {
+    unsafe { ffi::ImageColorTint(image, color) }
+}
+
+/// Modify image color: invert
+pub fn ImageColorInvert(image: &mut Image) {
+    unsafe { ffi::ImageColorInvert(image) }
+}
+
+/// Modify image color: grayscale
+pub fn ImageColorGrayscale(image: &mut Image) {
+    unsafe { ffi::ImageColorGrayscale(image) }
+}
+
+/// Modify image color: contrast (-100 to 100)
+pub fn ImageColorContrast(image: &mut Image, contrast: f32) {
+    unsafe { ffi::ImageColorContrast(image, contrast) }
+}
+
+/// Modify image color: brightness (-255 to 255)
+pub fn ImageColorBrightness(image: &mut Image, brightness: i32) {
+    unsafe { ffi::ImageColorBrightness(image, brightness) }
+}
+
+/// Modify image color: replace color
+pub fn ImageColorReplace(image: &mut Image, color: color::Color, replace: color::Color) {
+    unsafe { ffi::ImageColorReplace(image, color, replace) }
+}
+
+/// Load color data from image as a Color array (RGBA - 32bit)
+pub fn LoadImageColors(image: Image) -> Vec<color::Color> {
+    unsafe {
+        let colors_ptr = ffi::LoadImageColors(image);
+        let count = (image.width * image.height) as usize;
+        let slice = std::slice::from_raw_parts(colors_ptr, count);
+        let vec = slice.to_vec();
+        ffi::UnloadImageColors(colors_ptr); // Free the C-allocated memory
+        vec
+    }
+}
+
+/// Load colors palette from image as a Color array (RGBA - 32bit)
+pub fn LoadImagePalette(image: Image, max_palette_size: i32) -> Vec<color::Color> {
+    let mut color_count = 0;
+    unsafe {
+        let palette_ptr = ffi::LoadImagePalette(image, max_palette_size, &mut color_count);
+        let slice = std::slice::from_raw_parts(palette_ptr, color_count as usize);
+        let vec = slice.to_vec();
+        ffi::UnloadImagePalette(palette_ptr); // Free the C-allocated memory
+        vec
+    }
+}
+
+/// Get image alpha border rectangle
+pub fn GetImageAlphaBorder(image: Image, threshold: f32) -> math::Rectangle {
+    unsafe { ffi::GetImageAlphaBorder(image, threshold) }
+}
+
+/// Get image pixel color at (x, y) position
+pub fn GetImageColor(image: Image, x: i32, y: i32) -> color::Color {
+    unsafe { ffi::GetImageColor(image, x, y) }
+}
+
+//------------------------------------------------------------------------------------
+// Image drawing functions
+//------------------------------------------------------------------------------------
+
+/// Clear image background with given color
+pub fn ImageClearBackground(dst: &mut Image, color: color::Color) {
+    unsafe { ffi::ImageClearBackground(dst, color) }
+}
+
+/// Draw pixel within an image
+pub fn ImageDrawPixel(dst: &mut Image, pos_x: i32, pos_y: i32, color: color::Color) {
+    unsafe { ffi::ImageDrawPixel(dst, pos_x, pos_y, color) }
+}
+
+/// Draw pixel within an image (Vector version)
+pub fn ImageDrawPixelV(dst: &mut Image, position: math::Vector2, color: color::Color) {
+    unsafe { ffi::ImageDrawPixelV(dst, position, color) }
+}
+
+/// Draw line within an image
+pub fn ImageDrawLine(
+    dst: &mut Image,
+    start_pos_x: i32,
+    start_pos_y: i32,
+    end_pos_x: i32,
+    end_pos_y: i32,
+    color: color::Color,
+) {
+    unsafe { ffi::ImageDrawLine(dst, start_pos_x, start_pos_y, end_pos_x, end_pos_y, color) }
+}
+
+/// Draw line within an image (Vector version)
+pub fn ImageDrawLineV(
+    dst: &mut Image,
+    start: math::Vector2,
+    end: math::Vector2,
+    color: color::Color,
+) {
+    unsafe { ffi::ImageDrawLineV(dst, start, end, color) }
+}
+
+/// Draw rectangle within an image
+pub fn ImageDrawRectangle(
+    dst: &mut Image,
+    pos_x: i32,
+    pos_y: i32,
+    width: i32,
+    height: i32,
+    color: color::Color,
+) {
+    unsafe { ffi::ImageDrawRectangle(dst, pos_x, pos_y, width, height, color) }
+}
+
+/// Draw rectangle within an image (Vector version)
+pub fn ImageDrawRectangleV(
+    dst: &mut Image,
+    position: math::Vector2,
+    size: math::Vector2,
+    color: color::Color,
+) {
+    unsafe { ffi::ImageDrawRectangleV(dst, position, size, color) }
+}
+
+/// Draw rectangle within an image
+pub fn ImageDrawRectangleRec(dst: &mut Image, rec: math::Rectangle, color: color::Color) {
+    unsafe { ffi::ImageDrawRectangleRec(dst, rec, color) }
+}
+
+/// Draw rectangle lines within an image
+pub fn ImageDrawRectangleLines(
+    dst: &mut Image,
+    rec: math::Rectangle,
+    thick: i32,
+    color: color::Color,
+) {
+    unsafe { ffi::ImageDrawRectangleLines(dst, rec, thick, color) }
+}
+
+/// Draw a source image within a destination image (tint applied to source)
+pub fn ImageDraw(
+    dst: &mut Image,
+    src: Image,
+    src_rec: math::Rectangle,
+    dst_rec: math::Rectangle,
+    tint: color::Color,
+) {
+    unsafe { ffi::ImageDraw(dst, src, src_rec, dst_rec, tint) }
+}
+
+/// Draw text (using default font) within an image (destination)
+pub fn ImageDrawText(
+    dst: &mut Image,
+    text: &str,
+    pos_x: i32,
+    pos_y: i32,
+    font_size: i32,
+    color: color::Color,
+) {
+    let text_c = CString::new(text).expect("CString::new failed");
+    unsafe { ffi::ImageDrawText(dst, text_c.as_ptr(), pos_x, pos_y, font_size, color) }
+}
+
+/// Draw text (custom sprite font) within an image (destination)
+pub fn ImageDrawTextEx(
+    dst: &mut Image,
+    font: Font,
+    text: &str,
+    position: math::Vector2,
+    font_size: f32,
+    spacing: f32,
+    tint: color::Color,
+) {
+    let text_c = CString::new(text).expect("CString::new failed");
+    unsafe {
+        ffi::ImageDrawTextEx(
+            dst,
+            font,
+            text_c.as_ptr(),
+            position,
+            font_size,
+            spacing,
+            tint,
+        )
+    }
+}
+
+//------------------------------------------------------------------------------------
+// Texture loading functions
+//------------------------------------------------------------------------------------
+
+/// Load texture from file into GPU memory (VRAM)
+pub fn LoadTexture(file_name: &str) -> Texture2D {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    unsafe { ffi::LoadTexture(file_name_c.as_ptr()) }
+}
+
+/// Load texture from image data
+pub fn LoadTextureFromImage(image: Image) -> Texture2D {
+    unsafe { ffi::LoadTextureFromImage(image) }
+}
+
+/// Load cubemap from image, multiple image cubemap layouts supported
+pub fn LoadTextureCubemap(image: Image, layout: i32) -> TextureCubemap {
+    unsafe { ffi::LoadTextureCubemap(image, layout) }
+}
+
+/// Load texture for rendering (framebuffer)
+pub fn LoadRenderTexture(width: i32, height: i32) -> RenderTexture2D {
+    unsafe { ffi::LoadRenderTexture(width, height) }
+}
+
+/// Check if a texture is valid (loaded in GPU)
+pub fn IsTextureValid(texture: Texture2D) -> bool {
+    unsafe { ffi::IsTextureValid(texture) }
+}
+
+/// Unload texture from GPU memory (VRAM)
+pub fn UnloadTexture(texture: Texture2D) {
+    unsafe { ffi::UnloadTexture(texture) }
+}
+
+/// Check if a render texture is valid (loaded in GPU)
+pub fn IsRenderTextureValid(target: RenderTexture2D) -> bool {
+    unsafe { ffi::IsRenderTextureValid(target) }
+}
+
+/// Unload render texture from GPU memory (VRAM)
+pub fn UnloadRenderTexture(target: RenderTexture2D) {
+    unsafe { ffi::UnloadRenderTexture(target) }
+}
+
+/// Update GPU texture with new data
+pub fn UpdateTexture(texture: Texture2D, pixels: &[u8]) {
+    unsafe { ffi::UpdateTexture(texture, pixels.as_ptr() as *const c_void) }
+}
+
+/// Update GPU texture rectangle with new data
+pub fn UpdateTextureRec(texture: Texture2D, rec: math::Rectangle, pixels: &[u8]) {
+    unsafe { ffi::UpdateTextureRec(texture, rec, pixels.as_ptr() as *const c_void) }
+}
+
+//------------------------------------------------------------------------------------
+// Texture configuration functions
+//------------------------------------------------------------------------------------
+
+/// Generate GPU mipmaps for a texture
+pub fn GenTextureMipmaps(texture: &mut Texture2D) {
+    unsafe { ffi::GenTextureMipmaps(texture) }
+}
+
+/// Set texture scaling filter mode
+pub fn SetTextureFilter(texture: Texture2D, filter: i32) {
+    unsafe { ffi::SetTextureFilter(texture, filter) }
+}
+
+/// Set texture wrapping mode
+pub fn SetTextureWrap(texture: Texture2D, wrap: i32) {
+    unsafe { ffi::SetTextureWrap(texture, wrap) }
+}
+
+//------------------------------------------------------------------------------------
+// Texture drawing functions
+//------------------------------------------------------------------------------------
+
+/// Draw a Texture2D
+pub fn DrawTexture(texture: Texture2D, pos_x: i32, pos_y: i32, tint: color::Color) {
+    unsafe { ffi::DrawTexture(texture, pos_x, pos_y, tint) }
+}
+
+/// Draw a Texture2D with position defined as Vector2
+pub fn DrawTextureV(texture: Texture2D, position: math::Vector2, tint: color::Color) {
+    unsafe { ffi::DrawTextureV(texture, position, tint) }
+}
+
+/// Draw a Texture2D with extended parameters
+pub fn DrawTextureEx(
+    texture: Texture2D,
+    position: math::Vector2,
+    rotation: f32,
+    scale: f32,
+    tint: color::Color,
+) {
+    unsafe { ffi::DrawTextureEx(texture, position, rotation, scale, tint) }
+}
+
+/// Draw a part of a texture defined by a rectangle
+pub fn DrawTextureRec(
+    texture: Texture2D,
+    source: math::Rectangle,
+    position: math::Vector2,
+    tint: color::Color,
+) {
+    unsafe { ffi::DrawTextureRec(texture, source, position, tint) }
+}
+
+/// Draw a part of a texture defined by a rectangle with 'pro' parameters
+pub fn DrawTexturePro(
+    texture: Texture2D,
+    source: math::Rectangle,
+    dest: math::Rectangle,
+    origin: math::Vector2,
+    rotation: f32,
+    tint: color::Color,
+) {
+    unsafe { ffi::DrawTexturePro(texture, source, dest, origin, rotation, tint) }
+}
+
+/// Draws a texture (or part of it) that stretches or shrinks nicely
+pub fn DrawTextureNPatch(
+    texture: Texture2D,
+    n_patch_info: NPatchInfo,
+    dest: math::Rectangle,
+    origin: math::Vector2,
+    rotation: f32,
+    tint: color::Color,
+) {
+    unsafe { ffi::DrawTextureNPatch(texture, n_patch_info, dest, origin, rotation, tint) }
+}
+
+//------------------------------------------------------------------------------------
+// Color/pixel related functions
+//------------------------------------------------------------------------------------
+
+/// Check if two colors are equal
+pub fn ColorIsEqual(col1: color::Color, col2: color::Color) -> bool {
+    col1.r == col2.r && col1.g == col2.g && col1.b == col2.b && col1.a == col2.a
+}
+
+/// Get color with alpha applied, alpha goes from 0.0f to 1.0f
+pub fn Fade(color: color::Color, alpha: f32) -> color::Color {
+    unsafe { ffi::Fade(color, alpha) }
+}
+
+/// Get hexadecimal value for a Color (0xRRGGBBAA)
+pub fn ColorToInt(color: color::Color) -> i32 {
+    unsafe { ffi::ColorToInt(color) }
+}
+
+/// Get Color normalized as float [0..1]
+pub fn ColorNormalize(color: color::Color) -> math::Vector4 {
+    unsafe { ffi::ColorNormalize(color) }
+}
+
+/// Get Color from normalized values [0..1]
+pub fn ColorFromNormalized(normalized: math::Vector4) -> color::Color {
+    unsafe { ffi::ColorFromNormalized(normalized) }
+}
+
+/// Get HSV values for a Color
+pub fn ColorToHSV(color: color::Color) -> math::Vector3 {
+    unsafe { ffi::ColorToHSV(color) }
+}
+
+/// Get a Color from HSV values
+pub fn ColorFromHSV(hue: f32, saturation: f32, value: f32) -> color::Color {
+    unsafe { ffi::ColorFromHSV(hue, saturation, value) }
+}
+
+/// Get Color structure from hexadecimal value
+pub fn GetColor(hex_value: u32) -> color::Color {
+    unsafe { ffi::GetColor(hex_value) }
+}
+
+/// Get pixel data size in bytes for certain format
+pub fn GetPixelDataSize(width: i32, height: i32, format: i32) -> i32 {
+    unsafe { ffi::GetPixelDataSize(width, height, format) }
+}
+
+//------------------------------------------------------------------------------------
 // Font and Text Functions (Module: text)
 //------------------------------------------------------------------------------------
 
@@ -1924,6 +2619,963 @@ pub fn TextToPascal(text: &str) -> String {
 pub fn TextToInteger(text: &str) -> i32 {
     let text_c = CString::new(text).expect("CString::new failed");
     unsafe { ffi::TextToInteger(text_c.as_ptr()) }
+}
+
+//------------------------------------------------------------------------------------
+// Basic geometric 3D shapes drawing functions
+//------------------------------------------------------------------------------------
+
+/// Draw a line in 3D world space
+pub fn DrawLine3D(start_pos: math::Vector3, end_pos: math::Vector3, color: color::Color) {
+    unsafe { ffi::DrawLine3D(start_pos, end_pos, color) }
+}
+
+/// Draw a point in 3D space, actually a small line
+pub fn DrawPoint3D(position: math::Vector3, color: color::Color) {
+    unsafe { ffi::DrawPoint3D(position, color) }
+}
+
+/// Draw a circle in 3D world space
+pub fn DrawCircle3D(
+    center: math::Vector3,
+    radius: f32,
+    rotation_axis: math::Vector3,
+    rotation_angle: f32,
+    color: color::Color,
+) {
+    unsafe { ffi::DrawCircle3D(center, radius, rotation_axis, rotation_angle, color) }
+}
+
+/// Draw a color-filled triangle (vertex in counter-clockwise order!)
+pub fn DrawTriangle3D(
+    v1: math::Vector3,
+    v2: math::Vector3,
+    v3: math::Vector3,
+    color: color::Color,
+) {
+    unsafe { ffi::DrawTriangle3D(v1, v2, v3, color) }
+}
+
+/// Draw a triangle strip defined by points
+pub fn DrawTriangleStrip3D(points: &[math::Vector3], color: color::Color) {
+    unsafe { ffi::DrawTriangleStrip3D(points.as_ptr(), points.len() as c_int, color) }
+}
+
+/// Draw cube
+pub fn DrawCube(
+    position: math::Vector3,
+    width: f32,
+    height: f32,
+    length: f32,
+    color: color::Color,
+) {
+    unsafe { ffi::DrawCube(position, width, height, length, color) }
+}
+
+/// Draw cube (Vector version)
+pub fn DrawCubeV(position: math::Vector3, size: math::Vector3, color: color::Color) {
+    unsafe { ffi::DrawCubeV(position, size, color) }
+}
+
+/// Draw cube wires
+pub fn DrawCubeWires(
+    position: math::Vector3,
+    width: f32,
+    height: f32,
+    length: f32,
+    color: color::Color,
+) {
+    unsafe { ffi::DrawCubeWires(position, width, height, length, color) }
+}
+
+/// Draw cube wires (Vector version)
+pub fn DrawCubeWiresV(position: math::Vector3, size: math::Vector3, color: color::Color) {
+    unsafe { ffi::DrawCubeWiresV(position, size, color) }
+}
+
+/// Draw sphere
+pub fn DrawSphere(center_pos: math::Vector3, radius: f32, color: color::Color) {
+    unsafe { ffi::DrawSphere(center_pos, radius, color) }
+}
+
+/// Draw sphere with extended parameters
+pub fn DrawSphereEx(
+    center_pos: math::Vector3,
+    radius: f32,
+    rings: i32,
+    slices: i32,
+    color: color::Color,
+) {
+    unsafe { ffi::DrawSphereEx(center_pos, radius, rings, slices, color) }
+}
+
+/// Draw sphere wires
+pub fn DrawSphereWires(
+    center_pos: math::Vector3,
+    radius: f32,
+    rings: i32,
+    slices: i32,
+    color: color::Color,
+) {
+    unsafe { ffi::DrawSphereWires(center_pos, radius, rings, slices, color) }
+}
+
+/// Draw a cylinder/cone
+pub fn DrawCylinder(
+    position: math::Vector3,
+    radius_top: f32,
+    radius_bottom: f32,
+    height: f32,
+    slices: i32,
+    color: color::Color,
+) {
+    unsafe { ffi::DrawCylinder(position, radius_top, radius_bottom, height, slices, color) }
+}
+
+/// Draw a cylinder with base at startPos and top at endPos
+pub fn DrawCylinderEx(
+    start_pos: math::Vector3,
+    end_pos: math::Vector3,
+    start_radius: f32,
+    end_radius: f32,
+    sides: i32,
+    color: color::Color,
+) {
+    unsafe { ffi::DrawCylinderEx(start_pos, end_pos, start_radius, end_radius, sides, color) }
+}
+
+/// Draw a cylinder/cone wires
+pub fn DrawCylinderWires(
+    position: math::Vector3,
+    radius_top: f32,
+    radius_bottom: f32,
+    height: f32,
+    slices: i32,
+    color: color::Color,
+) {
+    unsafe { ffi::DrawCylinderWires(position, radius_top, radius_bottom, height, slices, color) }
+}
+
+/// Draw a cylinder wires with base at startPos and top at endPos
+pub fn DrawCylinderWiresEx(
+    start_pos: math::Vector3,
+    end_pos: math::Vector3,
+    start_radius: f32,
+    end_radius: f32,
+    sides: i32,
+    color: color::Color,
+) {
+    unsafe { ffi::DrawCylinderWiresEx(start_pos, end_pos, start_radius, end_radius, sides, color) }
+}
+
+/// Draw a capsule with the center of its sphere caps at startPos and endPos
+pub fn DrawCapsule(
+    start_pos: math::Vector3,
+    end_pos: math::Vector3,
+    radius: f32,
+    slices: i32,
+    rings: i32,
+    color: color::Color,
+) {
+    unsafe { ffi::DrawCapsule(start_pos, end_pos, radius, slices, rings, color) }
+}
+
+/// Draw capsule wireframe with the center of its sphere caps at startPos and endPos
+pub fn DrawCapsuleWires(
+    start_pos: math::Vector3,
+    end_pos: math::Vector3,
+    radius: f32,
+    slices: i32,
+    rings: i32,
+    color: color::Color,
+) {
+    unsafe { ffi::DrawCapsuleWires(start_pos, end_pos, radius, slices, rings, color) }
+}
+
+/// Draw a plane XZ
+pub fn DrawPlane(center_pos: math::Vector3, size: math::Vector2, color: color::Color) {
+    unsafe { ffi::DrawPlane(center_pos, size, color) }
+}
+
+/// Draw a ray line
+pub fn DrawRay(ray: Ray, color: color::Color) {
+    unsafe { ffi::DrawRay(ray, color) }
+}
+
+/// Draw a grid (centered at (0, 0, 0))
+pub fn DrawGrid(slices: i32, spacing: f32) {
+    unsafe { ffi::DrawGrid(slices, spacing) }
+}
+
+//------------------------------------------------------------------------------------
+// Model 3d Loading and Drawing Functions (Module: models)
+//------------------------------------------------------------------------------------
+
+/// Load model from files (meshes and materials)
+pub fn LoadModel(file_name: &str) -> Model {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    unsafe { ffi::LoadModel(file_name_c.as_ptr()) }
+}
+
+/// Load model from generated mesh (default material)
+pub fn LoadModelFromMesh(mesh: Mesh) -> Model {
+    unsafe { ffi::LoadModelFromMesh(mesh) }
+}
+
+/// Check if a model is valid (loaded in GPU, VAO/VBOs)
+pub fn IsModelValid(model: Model) -> bool {
+    unsafe { ffi::IsModelValid(model) }
+}
+
+/// Unload model (including meshes) from memory (RAM and/or VRAM)
+pub fn UnloadModel(model: Model) {
+    unsafe { ffi::UnloadModel(model) }
+}
+
+/// Compute model bounding box limits (considers all meshes)
+pub fn GetModelBoundingBox(model: Model) -> BoundingBox {
+    unsafe { ffi::GetModelBoundingBox(model) }
+}
+
+/// Draw a model (with texture if set)
+pub fn DrawModel(model: Model, position: math::Vector3, scale: f32, tint: color::Color) {
+    unsafe { ffi::DrawModel(model, position, scale, tint) }
+}
+
+/// Draw a model with extended parameters
+pub fn DrawModelEx(
+    model: Model,
+    position: math::Vector3,
+    rotation_axis: math::Vector3,
+    rotation_angle: f32,
+    scale: math::Vector3,
+    tint: color::Color,
+) {
+    unsafe { ffi::DrawModelEx(model, position, rotation_axis, rotation_angle, scale, tint) }
+}
+
+/// Draw a model wires (with texture if set)
+pub fn DrawModelWires(model: Model, position: math::Vector3, scale: f32, tint: color::Color) {
+    unsafe { ffi::DrawModelWires(model, position, scale, tint) }
+}
+
+/// Draw a model wires (with texture if set) with extended parameters
+pub fn DrawModelWiresEx(
+    model: Model,
+    position: math::Vector3,
+    rotation_axis: math::Vector3,
+    rotation_angle: f32,
+    scale: math::Vector3,
+    tint: color::Color,
+) {
+    unsafe { ffi::DrawModelWiresEx(model, position, rotation_axis, rotation_angle, scale, tint) }
+}
+
+/// Draw a model as points
+pub fn DrawModelPoints(model: Model, position: math::Vector3, scale: f32, tint: color::Color) {
+    unsafe { ffi::DrawModelPoints(model, position, scale, tint) }
+}
+
+/// Draw a model as points with extended parameters
+pub fn DrawModelPointsEx(
+    model: Model,
+    position: math::Vector3,
+    rotation_axis: math::Vector3,
+    rotation_angle: f32,
+    scale: math::Vector3,
+    tint: color::Color,
+) {
+    unsafe { ffi::DrawModelPointsEx(model, position, rotation_axis, rotation_angle, scale, tint) }
+}
+
+/// Draw bounding box (wires)
+pub fn DrawBoundingBox(box_obj: BoundingBox, color: color::Color) {
+    unsafe { ffi::DrawBoundingBox(box_obj, color) }
+}
+
+/// Draw a billboard texture
+pub fn DrawBillboard(
+    camera: Camera,
+    texture: Texture2D,
+    position: math::Vector3,
+    scale: f32,
+    tint: color::Color,
+) {
+    unsafe { ffi::DrawBillboard(camera, texture, position, scale, tint) }
+}
+
+/// Draw a billboard texture defined by source
+pub fn DrawBillboardRec(
+    camera: Camera,
+    texture: Texture2D,
+    source: math::Rectangle,
+    position: math::Vector3,
+    size: math::Vector2,
+    tint: color::Color,
+) {
+    unsafe { ffi::DrawBillboardRec(camera, texture, source, position, size, tint) }
+}
+
+/// Draw a billboard texture defined by source and rotation
+pub fn DrawBillboardPro(
+    camera: Camera,
+    texture: Texture2D,
+    source: math::Rectangle,
+    position: math::Vector3,
+    up: math::Vector3,
+    size: math::Vector2,
+    origin: math::Vector2,
+    rotation: f32,
+    tint: color::Color,
+) {
+    unsafe {
+        ffi::DrawBillboardPro(
+            camera, texture, source, position, up, size, origin, rotation, tint,
+        )
+    }
+}
+
+//------------------------------------------------------------------------------------
+// Mesh management functions
+//------------------------------------------------------------------------------------
+
+/// Upload mesh vertex data in GPU and provide VAO/VBO ids
+pub fn UploadMesh(mesh: &mut Mesh, dynamic: bool) {
+    unsafe { ffi::UploadMesh(mesh as *mut _, dynamic) }
+}
+
+/// Update mesh vertex data in GPU for a specific buffer index
+pub fn UpdateMeshBuffer<T>(mesh: Mesh, index: i32, data: &[T], offset: i32) {
+    unsafe {
+        ffi::UpdateMeshBuffer(
+            mesh,
+            index,
+            data.as_ptr() as *const c_void,
+            (data.len() * std::mem::size_of::<T>()) as c_int,
+            offset,
+        )
+    }
+}
+
+/// Unload mesh data from CPU and GPU
+pub fn UnloadMesh(mesh: Mesh) {
+    unsafe { ffi::UnloadMesh(mesh) }
+}
+
+/// Draw a 3d mesh with material and transform
+pub fn DrawMesh(mesh: Mesh, material: Material, transform: math::Matrix) {
+    unsafe { ffi::DrawMesh(mesh, material, transform) }
+}
+
+/// Draw multiple mesh instances with material and different transforms
+pub fn DrawMeshInstanced(mesh: Mesh, material: Material, transforms: &[math::Matrix]) {
+    unsafe {
+        ffi::DrawMeshInstanced(
+            mesh,
+            material,
+            transforms.as_ptr(),
+            transforms.len() as c_int,
+        )
+    }
+}
+
+/// Compute mesh bounding box limits
+pub fn GetMeshBoundingBox(mesh: Mesh) -> BoundingBox {
+    unsafe { ffi::GetMeshBoundingBox(mesh) }
+}
+
+/// Compute mesh tangents
+pub fn GenMeshTangents(mesh: &mut Mesh) {
+    unsafe { ffi::GenMeshTangents(mesh as *mut _) }
+}
+
+/// Export mesh data to file, returns true on success
+pub fn ExportMesh(mesh: Mesh, file_name: &str) -> bool {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    unsafe { ffi::ExportMesh(mesh, file_name_c.as_ptr()) }
+}
+
+/// Export mesh as code file (.h) defining multiple arrays of vertex attributes
+pub fn ExportMeshAsCode(mesh: Mesh, file_name: &str) -> bool {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    unsafe { ffi::ExportMeshAsCode(mesh, file_name_c.as_ptr()) }
+}
+
+//------------------------------------------------------------------------------------
+// Mesh generation functions
+//------------------------------------------------------------------------------------
+
+/// Generate polygonal mesh
+pub fn GenMeshPoly(sides: i32, radius: f32) -> Mesh {
+    unsafe { ffi::GenMeshPoly(sides, radius) }
+}
+
+/// Generate plane mesh (with subdivisions)
+pub fn GenMeshPlane(width: f32, length: f32, res_x: i32, res_z: i32) -> Mesh {
+    unsafe { ffi::GenMeshPlane(width, length, res_x, res_z) }
+}
+
+/// Generate cuboid mesh
+pub fn GenMeshCube(width: f32, height: f32, length: f32) -> Mesh {
+    unsafe { ffi::GenMeshCube(width, height, length) }
+}
+
+/// Generate sphere mesh (standard sphere)
+pub fn GenMeshSphere(radius: f32, rings: i32, slices: i32) -> Mesh {
+    unsafe { ffi::GenMeshSphere(radius, rings, slices) }
+}
+
+/// Generate half-sphere mesh (no bottom cap)
+pub fn GenMeshHemiSphere(radius: f32, rings: i32, slices: i32) -> Mesh {
+    unsafe { ffi::GenMeshHemiSphere(radius, rings, slices) }
+}
+
+/// Generate cylinder mesh
+pub fn GenMeshCylinder(radius: f32, height: f32, slices: i32) -> Mesh {
+    unsafe { ffi::GenMeshCylinder(radius, height, slices) }
+}
+
+/// Generate cone/pyramid mesh
+pub fn GenMeshCone(radius: f32, height: f32, slices: i32) -> Mesh {
+    unsafe { ffi::GenMeshCone(radius, height, slices) }
+}
+
+/// Generate torus mesh
+pub fn GenMeshTorus(radius: f32, size: f32, rad_seg: i32, sides: i32) -> Mesh {
+    unsafe { ffi::GenMeshTorus(radius, size, rad_seg, sides) }
+}
+
+/// Generate trefoil knot mesh
+pub fn GenMeshKnot(radius: f32, size: f32, rad_seg: i32, sides: i32) -> Mesh {
+    unsafe { ffi::GenMeshKnot(radius, size, rad_seg, sides) }
+}
+
+/// Generate heightmap mesh from image data
+pub fn GenMeshHeightmap(heightmap: Image, size: math::Vector3) -> Mesh {
+    unsafe { ffi::GenMeshHeightmap(heightmap, size) }
+}
+
+/// Generate cubes-based map mesh from image data
+pub fn GenMeshCubicmap(cubicmap: Image, cube_size: math::Vector3) -> Mesh {
+    unsafe { ffi::GenMeshCubicmap(cubicmap, cube_size) }
+}
+
+//------------------------------------------------------------------------------------
+// Material loading/unloading functions
+//------------------------------------------------------------------------------------
+
+/// Load materials from model file.
+/// NOTE: The returned slice is valid until you unload the materials manually.
+pub fn LoadMaterials(file_name: &str) -> &'static mut [Material] {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    let mut count = 0;
+    unsafe {
+        let materials_ptr = ffi::LoadMaterials(file_name_c.as_ptr(), &mut count);
+        std::slice::from_raw_parts_mut(materials_ptr, count as usize)
+    }
+}
+
+/// Load default material
+pub fn LoadMaterialDefault() -> Material {
+    unsafe { ffi::LoadMaterialDefault() }
+}
+
+/// Check if a material is valid (shader assigned, map textures loaded in GPU)
+pub fn IsMaterialValid(material: Material) -> bool {
+    unsafe { ffi::IsMaterialValid(material) }
+}
+
+/// Unload material from GPU memory (VRAM)
+pub fn UnloadMaterial(material: Material) {
+    unsafe { ffi::UnloadMaterial(material) }
+}
+
+/// Set texture for a material map type
+pub fn SetMaterialTexture(material: &mut Material, map_type: i32, texture: Texture2D) {
+    unsafe { ffi::SetMaterialTexture(material as *mut _, map_type, texture) }
+}
+
+/// Set material for a mesh
+pub fn SetModelMeshMaterial(model: &mut Model, mesh_id: i32, material_id: i32) {
+    unsafe { ffi::SetModelMeshMaterial(model as *mut _, mesh_id, material_id) }
+}
+
+//------------------------------------------------------------------------------------
+// Model animations loading/unloading functions
+//------------------------------------------------------------------------------------
+
+/// Load model animations from file.
+/// NOTE: The returned slice is valid until you unload the animations manually.
+pub fn LoadModelAnimations(file_name: &str) -> &'static mut [ModelAnimation] {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    let mut count = 0;
+    unsafe {
+        let anims_ptr = ffi::LoadModelAnimations(file_name_c.as_ptr(), &mut count);
+        std::slice::from_raw_parts_mut(anims_ptr, count as usize)
+    }
+}
+
+/// Update model animation pose (CPU)
+pub fn UpdateModelAnimation(model: Model, anim: ModelAnimation, frame: i32) {
+    unsafe { ffi::UpdateModelAnimation(model, anim, frame) }
+}
+
+/// Update model animation mesh bone matrices (GPU skinning)
+pub fn UpdateModelAnimationBones(model: Model, anim: ModelAnimation, frame: i32) {
+    unsafe { ffi::UpdateModelAnimationBones(model, anim, frame) }
+}
+
+/// Unload animation data
+pub fn UnloadModelAnimation(anim: ModelAnimation) {
+    unsafe { ffi::UnloadModelAnimation(anim) }
+}
+
+/// Unload animation array data
+pub fn UnloadModelAnimations(animations: &mut [ModelAnimation]) {
+    unsafe { ffi::UnloadModelAnimations(animations.as_mut_ptr(), animations.len() as c_int) }
+}
+
+/// Check model animation skeleton match
+pub fn IsModelAnimationValid(model: Model, anim: ModelAnimation) -> bool {
+    unsafe { ffi::IsModelAnimationValid(model, anim) }
+}
+
+//------------------------------------------------------------------------------------
+// Collision detection functions
+//------------------------------------------------------------------------------------
+
+/// Check collision between two spheres
+pub fn CheckCollisionSpheres(
+    center1: math::Vector3,
+    radius1: f32,
+    center2: math::Vector3,
+    radius2: f32,
+) -> bool {
+    unsafe { ffi::CheckCollisionSpheres(center1, radius1, center2, radius2) }
+}
+
+/// Check collision between two bounding boxes
+pub fn CheckCollisionBoxes(box1: BoundingBox, box2: BoundingBox) -> bool {
+    unsafe { ffi::CheckCollisionBoxes(box1, box2) }
+}
+
+/// Check collision between box and sphere
+pub fn CheckCollisionBoxSphere(box_obj: BoundingBox, center: math::Vector3, radius: f32) -> bool {
+    unsafe { ffi::CheckCollisionBoxSphere(box_obj, center, radius) }
+}
+
+/// Get collision info between ray and sphere
+pub fn GetRayCollisionSphere(ray: Ray, center: math::Vector3, radius: f32) -> RayCollision {
+    unsafe { ffi::GetRayCollisionSphere(ray, center, radius) }
+}
+
+/// Get collision info between ray and box
+pub fn GetRayCollisionBox(ray: Ray, box_obj: BoundingBox) -> RayCollision {
+    unsafe { ffi::GetRayCollisionBox(ray, box_obj) }
+}
+
+/// Get collision info between ray and mesh
+pub fn GetRayCollisionMesh(ray: Ray, mesh: Mesh, transform: math::Matrix) -> RayCollision {
+    unsafe { ffi::GetRayCollisionMesh(ray, mesh, transform) }
+}
+
+/// Get collision info between ray and triangle
+pub fn GetRayCollisionTriangle(
+    ray: Ray,
+    p1: math::Vector3,
+    p2: math::Vector3,
+    p3: math::Vector3,
+) -> RayCollision {
+    unsafe { ffi::GetRayCollisionTriangle(ray, p1, p2, p3) }
+}
+
+/// Get collision info between ray and quad
+pub fn GetRayCollisionQuad(
+    ray: Ray,
+    p1: math::Vector3,
+    p2: math::Vector3,
+    p3: math::Vector3,
+    p4: math::Vector3,
+) -> RayCollision {
+    unsafe { ffi::GetRayCollisionQuad(ray, p1, p2, p3, p4) }
+}
+
+//------------------------------------------------------------------------------------
+// Audio Device Functions (Module: raudio)
+//------------------------------------------------------------------------------------
+
+/// Initialize audio device and context
+pub fn InitAudioDevice() {
+    unsafe { ffi::InitAudioDevice() }
+}
+
+/// Close the audio device and context
+pub fn CloseAudioDevice() {
+    unsafe { ffi::CloseAudioDevice() }
+}
+
+/// Check if audio device has been initialized successfully
+pub fn IsAudioDeviceReady() -> bool {
+    unsafe { ffi::IsAudioDeviceReady() }
+}
+
+/// Set master volume (listener)
+pub fn SetMasterVolume(volume: f32) {
+    unsafe { ffi::SetMasterVolume(volume) }
+}
+
+/// Get master volume (listener)
+pub fn GetMasterVolume() -> f32 {
+    unsafe { ffi::GetMasterVolume() }
+}
+
+//------------------------------------------------------------------------------------
+// Wave/Sound Loading and Management
+//------------------------------------------------------------------------------------
+
+/// Load wave data from file
+pub fn LoadWave(file_name: &str) -> Wave {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    unsafe { ffi::LoadWave(file_name_c.as_ptr()) }
+}
+
+/// Load wave from memory buffer, fileType refers to extension: i.e. ".wav"
+pub fn LoadWaveFromMemory(file_type: &str, file_data: &[u8]) -> Wave {
+    let file_type_c = CString::new(file_type).expect("CString::new failed");
+    unsafe {
+        ffi::LoadWaveFromMemory(
+            file_type_c.as_ptr(),
+            file_data.as_ptr(),
+            file_data.len() as c_int,
+        )
+    }
+}
+
+/// Checks if wave data is valid
+pub fn IsWaveValid(wave: Wave) -> bool {
+    unsafe { ffi::IsWaveValid(wave) }
+}
+
+/// Load sound from file
+pub fn LoadSound(file_name: &str) -> Sound {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    unsafe { ffi::LoadSound(file_name_c.as_ptr()) }
+}
+
+/// Load sound from wave data
+pub fn LoadSoundFromWave(wave: Wave) -> Sound {
+    unsafe { ffi::LoadSoundFromWave(wave) }
+}
+
+/// Create a new sound that shares the same sample data as the source sound
+pub fn LoadSoundAlias(source: Sound) -> Sound {
+    unsafe { ffi::LoadSoundAlias(source) }
+}
+
+/// Checks if a sound is valid
+pub fn IsSoundValid(sound: Sound) -> bool {
+    unsafe { ffi::IsSoundValid(sound) }
+}
+
+/// Update sound buffer with new data
+pub fn UpdateSound<T>(sound: Sound, data: &[T], sample_count: i32) {
+    unsafe {
+        ffi::UpdateSound(sound, data.as_ptr() as *const c_void, sample_count);
+    }
+}
+
+/// Unload wave data
+pub fn UnloadWave(wave: Wave) {
+    unsafe { ffi::UnloadWave(wave) }
+}
+
+/// Unload sound
+pub fn UnloadSound(sound: Sound) {
+    unsafe { ffi::UnloadSound(sound) }
+}
+
+/// Unload a sound alias
+pub fn UnloadSoundAlias(alias: Sound) {
+    unsafe { ffi::UnloadSoundAlias(alias) }
+}
+
+/// Export wave data to file, returns true on success
+pub fn ExportWave(wave: Wave, file_name: &str) -> bool {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    unsafe { ffi::ExportWave(wave, file_name_c.as_ptr()) }
+}
+
+/// Export wave sample data to code (.h), returns true on success
+pub fn ExportWaveAsCode(wave: Wave, file_name: &str) -> bool {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    unsafe { ffi::ExportWaveAsCode(wave, file_name_c.as_ptr()) }
+}
+
+/// Play a sound
+pub fn PlaySound(sound: Sound) {
+    unsafe { ffi::PlaySound(sound) }
+}
+
+/// Stop playing a sound
+pub fn StopSound(sound: Sound) {
+    unsafe { ffi::StopSound(sound) }
+}
+
+/// Pause a sound
+pub fn PauseSound(sound: Sound) {
+    unsafe { ffi::PauseSound(sound) }
+}
+
+/// Resume a paused sound
+pub fn ResumeSound(sound: Sound) {
+    unsafe { ffi::ResumeSound(sound) }
+}
+
+/// Check if a sound is currently playing
+pub fn IsSoundPlaying(sound: Sound) -> bool {
+    unsafe { ffi::IsSoundPlaying(sound) }
+}
+
+/// Set volume for a sound (1.0 is max level)
+pub fn SetSoundVolume(sound: Sound, volume: f32) {
+    unsafe { ffi::SetSoundVolume(sound, volume) }
+}
+
+/// Set pitch for a sound (1.0 is base level)
+pub fn SetSoundPitch(sound: Sound, pitch: f32) {
+    unsafe { ffi::SetSoundPitch(sound, pitch) }
+}
+
+/// Set pan for a sound (0.5 is center)
+pub fn SetSoundPan(sound: Sound, pan: f32) {
+    unsafe { ffi::SetSoundPan(sound, pan) }
+}
+
+/// Copy a wave to a new wave
+pub fn WaveCopy(wave: Wave) -> Wave {
+    unsafe { ffi::WaveCopy(wave) }
+}
+
+/// Crop a wave to defined frames range
+pub fn WaveCrop(wave: &mut Wave, init_frame: i32, final_frame: i32) {
+    unsafe { ffi::WaveCrop(wave as *mut _, init_frame, final_frame) }
+}
+
+/// Convert wave data to desired format
+pub fn WaveFormat(wave: &mut Wave, sample_rate: i32, sample_size: i32, channels: i32) {
+    unsafe { ffi::WaveFormat(wave as *mut _, sample_rate, sample_size, channels) }
+}
+
+/// Load samples data from wave as a 32bit float data array.
+/// NOTE: This function automatically unloads the C-allocated memory and returns a safe `Vec<f32>`.
+pub fn LoadWaveSamples(wave: Wave) -> Vec<f32> {
+    unsafe {
+        let samples_ptr = ffi::LoadWaveSamples(wave);
+        // The total number of samples is frameCount * channels
+        let sample_count = (wave.frameCount * wave.channels) as usize;
+        let samples_slice = std::slice::from_raw_parts(samples_ptr, sample_count);
+        let result_vec = samples_slice.to_vec();
+        // Free the C-allocated memory
+        ffi::UnloadWaveSamples(samples_ptr);
+        result_vec
+    }
+}
+
+// UnloadWaveSamples is now an implementation detail of the safe LoadWaveSamples wrapper above.
+// pub fn UnloadWaveSamples(samples: *mut f32) {
+//     unsafe { ffi::UnloadWaveSamples(samples) }
+// }
+
+//------------------------------------------------------------------------------------
+// Music Streaming Functions
+//------------------------------------------------------------------------------------
+
+/// Load music stream from file
+pub fn LoadMusicStream(file_name: &str) -> Music {
+    let file_name_c = CString::new(file_name).expect("CString::new failed");
+    unsafe { ffi::LoadMusicStream(file_name_c.as_ptr()) }
+}
+
+/// Load music stream from data
+pub fn LoadMusicStreamFromMemory(file_type: &str, data: &[u8]) -> Music {
+    let file_type_c = CString::new(file_type).expect("CString::new failed");
+    unsafe {
+        ffi::LoadMusicStreamFromMemory(file_type_c.as_ptr(), data.as_ptr(), data.len() as c_int)
+    }
+}
+
+/// Checks if a music stream is valid
+pub fn IsMusicValid(music: Music) -> bool {
+    unsafe { ffi::IsMusicValid(music) }
+}
+
+/// Unload music stream
+pub fn UnloadMusicStream(music: Music) {
+    unsafe { ffi::UnloadMusicStream(music) }
+}
+
+/// Start music playing
+pub fn PlayMusicStream(music: Music) {
+    unsafe { ffi::PlayMusicStream(music) }
+}
+
+/// Check if music is playing
+pub fn IsMusicStreamPlaying(music: Music) -> bool {
+    unsafe { ffi::IsMusicStreamPlaying(music) }
+}
+
+/// Updates buffers for music streaming
+pub fn UpdateMusicStream(music: Music) {
+    unsafe { ffi::UpdateMusicStream(music) }
+}
+
+/// Stop music playing
+pub fn StopMusicStream(music: Music) {
+    unsafe { ffi::StopMusicStream(music) }
+}
+
+/// Pause music playing
+pub fn PauseMusicStream(music: Music) {
+    unsafe { ffi::PauseMusicStream(music) }
+}
+
+/// Resume playing paused music
+pub fn ResumeMusicStream(music: Music) {
+    unsafe { ffi::ResumeMusicStream(music) }
+}
+
+/// Seek music to a position (in seconds)
+pub fn SeekMusicStream(music: Music, position: f32) {
+    unsafe { ffi::SeekMusicStream(music, position) }
+}
+
+/// Set volume for music (1.0 is max level)
+pub fn SetMusicVolume(music: Music, volume: f32) {
+    unsafe { ffi::SetMusicVolume(music, volume) }
+}
+
+/// Set pitch for a music (1.0 is base level)
+pub fn SetMusicPitch(music: Music, pitch: f32) {
+    unsafe { ffi::SetMusicPitch(music, pitch) }
+}
+
+/// Set pan for a music (0.5 is center)
+pub fn SetMusicPan(music: Music, pan: f32) {
+    unsafe { ffi::SetMusicPan(music, pan) }
+}
+
+/// Get music time length (in seconds)
+pub fn GetMusicTimeLength(music: Music) -> f32 {
+    unsafe { ffi::GetMusicTimeLength(music) }
+}
+
+/// Get current music time played (in seconds)
+pub fn GetMusicTimePlayed(music: Music) -> f32 {
+    unsafe { ffi::GetMusicTimePlayed(music) }
+}
+
+//------------------------------------------------------------------------------------
+// AudioStream Functions
+//------------------------------------------------------------------------------------
+
+/// Represents the audio callback function signature.
+pub type AudioCallback = Option<unsafe extern "C" fn(buffer: *mut c_void, frames: u32)>;
+
+/// Load audio stream (to stream raw audio pcm data)
+pub fn LoadAudioStream(sample_rate: u32, sample_size: u32, channels: u32) -> AudioStream {
+    unsafe { ffi::LoadAudioStream(sample_rate, sample_size, channels) }
+}
+
+/// Checks if an audio stream is valid
+pub fn IsAudioStreamValid(stream: AudioStream) -> bool {
+    unsafe { ffi::IsAudioStreamValid(stream) }
+}
+
+/// Unload audio stream and free memory
+pub fn UnloadAudioStream(stream: AudioStream) {
+    unsafe { ffi::UnloadAudioStream(stream) }
+}
+
+/// Update audio stream buffers with data
+pub fn UpdateAudioStream<T>(stream: AudioStream, data: &[T], frame_count: i32) {
+    unsafe {
+        ffi::UpdateAudioStream(stream, data.as_ptr() as *const c_void, frame_count);
+    }
+}
+
+/// Check if any audio stream buffers requires refill
+pub fn IsAudioStreamProcessed(stream: AudioStream) -> bool {
+    unsafe { ffi::IsAudioStreamProcessed(stream) }
+}
+
+/// Play audio stream
+pub fn PlayAudioStream(stream: AudioStream) {
+    unsafe { ffi::PlayAudioStream(stream) }
+}
+
+/// Pause audio stream
+pub fn PauseAudioStream(stream: AudioStream) {
+    unsafe { ffi::PauseAudioStream(stream) }
+}
+
+/// Resume audio stream
+pub fn ResumeAudioStream(stream: AudioStream) {
+    unsafe { ffi::ResumeAudioStream(stream) }
+}
+
+/// Check if audio stream is playing
+pub fn IsAudioStreamPlaying(stream: AudioStream) -> bool {
+    unsafe { ffi::IsAudioStreamPlaying(stream) }
+}
+
+/// Stop audio stream
+pub fn StopAudioStream(stream: AudioStream) {
+    unsafe { ffi::StopAudioStream(stream) }
+}
+
+/// Set volume for audio stream (1.0 is max level)
+pub fn SetAudioStreamVolume(stream: AudioStream, volume: f32) {
+    unsafe { ffi::SetAudioStreamVolume(stream, volume) }
+}
+
+/// Set pitch for audio stream (1.0 is base level)
+pub fn SetAudioStreamPitch(stream: AudioStream, pitch: f32) {
+    unsafe { ffi::SetAudioStreamPitch(stream, pitch) }
+}
+
+/// Set pan for audio stream (0.5 is centered)
+pub fn SetAudioStreamPan(stream: AudioStream, pan: f32) {
+    unsafe { ffi::SetAudioStreamPan(stream, pan) }
+}
+
+/// Default size for new audio streams
+pub fn SetAudioStreamBufferSizeDefault(size: i32) {
+    unsafe { ffi::SetAudioStreamBufferSizeDefault(size) }
+}
+
+/// Audio thread callback to request new data
+pub fn SetAudioStreamCallback(stream: AudioStream, callback: AudioCallback) {
+    unsafe { ffi::SetAudioStreamCallback(stream, callback) }
+}
+
+/// Attach audio stream processor to stream
+pub fn AttachAudioStreamProcessor(stream: AudioStream, processor: AudioCallback) {
+    unsafe { ffi::AttachAudioStreamProcessor(stream, processor) }
+}
+
+/// Detach audio stream processor from stream
+pub fn DetachAudioStreamProcessor(stream: AudioStream, processor: AudioCallback) {
+    unsafe { ffi::DetachAudioStreamProcessor(stream, processor) }
+}
+
+/// Attach audio stream processor to the entire audio pipeline
+pub fn AttachAudioMixedProcessor(processor: AudioCallback) {
+    unsafe { ffi::AttachAudioMixedProcessor(processor) }
+}
+
+/// Detach audio stream processor from the entire audio pipeline
+pub fn DetachAudioMixedProcessor(processor: AudioCallback) {
+    unsafe { ffi::DetachAudioMixedProcessor(processor) }
 }
 
 //----------------------------------------------------------------------------------
