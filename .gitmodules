@@ -4,3 +4,6 @@
 [submodule "raygui"]
 	path = raygui
 	url = https://github.com/raysan5/raygui.git
+[submodule "emsdk"]
+	path = emsdk
+	url = https://github.com/emscripten-core/emsdk.git

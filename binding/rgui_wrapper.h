@@ -6,6 +6,8 @@
 #if defined(_WIN32)
     #include "rlgl.h"
 #endif
+
+#if defined(RAYGUI_IMPLEMENTATION)
 void DynGuiLoadStyleAmber(void);
 void DynGuiLoadStyleGenesis(void);
 void DynGuiLoadStyleJungle(void);
@@ -20,5 +22,5 @@ void DynGuiLoadStyleBluish(void);
 void DynGuiLoadStyleDark(void);
 void DynGuiLoadStyleCandy(void);
 void DynGuiLoadStyleAshes(void);
-
 #include "raygui.h"
+#endif

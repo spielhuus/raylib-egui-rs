@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+        <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width">
+                <title>rect example</title>
+        </head>
+        <body>
+                <h1>raylib wasm example: rect</h1>
+                <div id="header">
+                        <div class="spinner" id='spinner'></div>
+                        <div class="emscripten" id="status">Downloading...</div>
+                        <div class="emscripten">
+                                <progress value="0" max="100" id="progress" hidden=1></progress>
+                        </div>
+                </div>
+
+                <div class="emscripten_border">
+                        <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
+                </div>
+                <script type="text/javascript" src="load_wasm.js"></script>
+                <script async type="text/javascript" src="../target/wasm32-unknown-emscripten/release/examples/rect.js"></script>
+        </body>
+</html>

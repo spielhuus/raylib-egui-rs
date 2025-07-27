@@ -153,9 +153,7 @@ fn gen_bindings() {
     );
 
     let raylib_path = "./raylib";
-    let raygui_path = "./raygui";
     let raylib_header_path = PathBuf::from(&raylib_path).join("src");
-    let raygui_header_path = PathBuf::from(&raygui_path).join("src");
 
     // Link to the compiled raylib library
     // println!("cargo:rustc-link-search=native={}", raylib_header_path.display());
@@ -179,11 +177,32 @@ fn gen_bindings() {
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .clang_arg(format!("-I{}", raylib_header_path.display()))
-        .clang_arg(format!("-I{}", raygui_header_path.display()))
-        .clang_arg("-DRAYGUI_IMPLEMENTATION")
         .clang_arg("-std=c99")
         .clang_arg(plat)
         .parse_callbacks(Box::new(ignored_macros));
+
+    #[cfg(feature = "raygui")]
+    {
+        let raygui_path = "./raygui";
+        let raygui_header_path = PathBuf::from(&raygui_path).join("src");
+        builder = builder
+            .clang_arg(format!("-I{}", raygui_header_path.display()))
+            .clang_arg("-DRAYGUI_IMPLEMENTATION");
+    }
+
+    if target.contains("emscripten") {
+        let emsdk = env::var("EMSDK").unwrap();
+        let emscripten_sys_include =
+            PathBuf::from(emsdk).join("upstream/emscripten/cache/sysroot/include");
+
+        // Tell bindgen to use the Emscripten sysroot headers
+        builder = builder
+            .clang_arg(format!(
+                "--sysroot={}",
+                emscripten_sys_include.parent().unwrap().display()
+            ))
+            .clang_arg(format!("-I{}", emscripten_sys_include.display()));
+    }
 
     if platform == Platform::Desktop && os == PlatformOS::Windows {
         // odd workaround for booleans being broken
@@ -225,6 +244,14 @@ fn build_with_cmake(src_path: &str) {
     let (platform, platform_os) = platform_from_target(&target);
 
     let mut conf = cmake::Config::new(src_path);
+
+    let emsdk = env::var("EMSDK").expect("EMSDK env var not set. Have you sourced emsdk_env.sh?");
+    let emscripten_cmake =
+        PathBuf::from(emsdk).join("upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake");
+    if target == "wasm32-unknown-emscripten" {
+        // conf.define("PLATFORM", "Web");
+        conf.define("CMAKE_TOOLCHAIN_FILE", emscripten_cmake);
+    }
 
     let profile;
     #[cfg(debug_assertions)]
@@ -380,16 +407,30 @@ fn build_with_cmake(src_path: &str) {
     }
 }
 
+#[cfg(feature = "raygui")]
 fn gen_rgui() {
+    let target = env::var("TARGET").unwrap();
+
     // Compile the code and link with cc crate
     let raylib_src_path = PathBuf::from("raylib/src");
-    cc::Build::new()
+    let mut build = cc::Build::new();
+    build
         .files(vec!["binding/rgui_wrapper.c"])
         .include("binding")
         .include(raylib_src_path)
         .warnings(false)
-        .extra_warnings(false)
-        .compile("rgui");
+        .extra_warnings(false);
+
+    if target.contains("emscripten") {
+        let emsdk =
+            env::var("EMSDK").expect("EMSDK env var not set. Have you sourced emsdk_env.sh?");
+        let emscripten_sys_include =
+            PathBuf::from(emsdk).join("upstream/emscripten/cache/sysroot/include");
+
+        // Add the Emscripten system include path
+        build.include(emscripten_sys_include);
+    }
+    build.compile("rgui");
 }
 
 fn link(platform: Platform, platform_os: PlatformOS) {

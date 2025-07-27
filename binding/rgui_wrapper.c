@@ -3,6 +3,9 @@
 #define RAYGUI_SUPPORT_ICONS
 #define RLGL_IMPLEMENTATION
 #define RLGL_SUPPORT_TRACELOG
+
+
+#if defined(RAYGUI_IMPLEMENTATION)
 #include "../raygui/src/raygui.h"
 #include "../raygui/styles/amber/style_amber.h"
 #include "../raygui/styles/genesis/style_genesis.h"
@@ -75,5 +78,6 @@ void DynGuiLoadStyleCandy(void)
 void DynGuiLoadStyleAshes(void)
 {
         GuiLoadStyleAshes();
-}         
+}
+#endif
 #undef RAYGUI_IMPLEMENTATION

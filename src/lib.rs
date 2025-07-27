@@ -7,7 +7,8 @@ use std::os::raw::{c_int, c_void};
 
 pub mod color;
 pub mod math;
-// TODO: only then feature is set
+
+#[cfg(feature = "raygui")]
 pub mod raygui;
 
 mod ffi {
