@@ -1,3 +1,4 @@
+use raylib_egui_rs::raylib::*;
 use raylib_egui_rs::*;
 
 pub fn main() {

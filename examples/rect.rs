@@ -1,4 +1,5 @@
 use mint::Vector2;
+use raylib_egui_rs::raylib::*;
 use raylib_egui_rs::*;
 
 #[cfg(target_arch = "wasm32")]

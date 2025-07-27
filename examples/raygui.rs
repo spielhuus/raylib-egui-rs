@@ -1,5 +1,6 @@
 use raylib_egui_rs::math::*;
 use raylib_egui_rs::raygui::*;
+use raylib_egui_rs::raylib::*;
 use raylib_egui_rs::*;
 
 const SCREEN_WIDTH: i32 = 960;
