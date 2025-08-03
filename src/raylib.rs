@@ -5,10 +5,11 @@ use crate::color;
 use crate::ffi;
 use crate::math;
 
-use crate::ffi::{
-    AudioStream, BoundingBox, Camera, Camera2D, Camera3D, Font, Image, KeyboardKey, Material, Mesh,
-    Model, ModelAnimation, Music, NPatchInfo, Ray, RayCollision, RenderTexture2D, Shader, Sound,
-    Texture2D, TextureCubemap, VrDeviceInfo, VrStereoConfig, Wave, float3, float16,
+pub use crate::ffi::{
+    AudioStream, BoundingBox, Camera, Camera2D, Camera3D, CameraMode, CameraProjection, Font,
+    Image, KeyboardKey, Material, MaterialMapIndex, Mesh, Model, ModelAnimation, MouseButton,
+    Music, NPatchInfo, PixelFormat, Ray, RayCollision, RenderTexture2D, Shader, Sound, Texture2D,
+    TextureCubemap, TextureFilter, VrDeviceInfo, VrStereoConfig, Wave, float3, float16,
 };
 
 //------------------------------------------------------------------------------------
@@ -2110,8 +2111,8 @@ pub fn UnloadRenderTexture(target: RenderTexture2D) {
 }
 
 /// Update GPU texture with new data
-pub fn UpdateTexture(texture: Texture2D, pixels: &[u8]) {
-    unsafe { ffi::UpdateTexture(texture, pixels.as_ptr() as *const c_void) }
+pub fn UpdateTexture(texture: Texture2D, pixels: *const ::std::os::raw::c_void) {
+    unsafe { ffi::UpdateTexture(texture, pixels) }
 }
 
 /// Update GPU texture rectangle with new data

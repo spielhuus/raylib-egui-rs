@@ -1,9 +1,9 @@
 use crate::ffi;
 use crate::{
-    Font,
     color::Color,
     math::{Rectangle, Vector2, Vector3},
-}; // Assumed types
+    raylib::Font,
+};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int};
 

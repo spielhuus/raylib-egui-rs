@@ -9,8 +9,7 @@ pub fn main() {
         BeginDrawing();
         ClearBackground(raylib_egui_rs::color::Color::BLACK);
 
-        // DrawRectangleRec(state.board.walla, raylib::WHITE);
-        DrawText("Hello Saylor", 200, 280, 64, color::Color::BISQUE);
+        DrawText("Ahoi Saylor", 200, 280, 64, color::Color::BISQUE);
         //TODO load external font
         EndDrawing();
     }

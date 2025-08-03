@@ -245,14 +245,6 @@ fn build_with_cmake(src_path: &str) {
 
     let mut conf = cmake::Config::new(src_path);
 
-    let emsdk = env::var("EMSDK").expect("EMSDK env var not set. Have you sourced emsdk_env.sh?");
-    let emscripten_cmake =
-        PathBuf::from(emsdk).join("upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake");
-    if target == "wasm32-unknown-emscripten" {
-        // conf.define("PLATFORM", "Web");
-        conf.define("CMAKE_TOOLCHAIN_FILE", emscripten_cmake);
-    }
-
     let profile;
     #[cfg(debug_assertions)]
     {
@@ -325,7 +317,16 @@ fn build_with_cmake(src_path: &str) {
                 conf.define("PLATFORM", "Desktop")
             }
         }
-        Platform::Web => conf.define("PLATFORM", "Web"),
+        Platform::Web => {
+            let emsdk =
+                env::var("EMSDK").expect("EMSDK env var not set. Have you sourced emsdk_env.sh?");
+            let emscripten_cmake = PathBuf::from(emsdk)
+                .join("upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake");
+            if target == "wasm32-unknown-emscripten" {
+                conf.define("CMAKE_TOOLCHAIN_FILE", emscripten_cmake);
+            }
+            conf.define("PLATFORM", "Web")
+        }
         Platform::RPI => conf.define("PLATFORM", "Raspberry Pi"),
         Platform::Android => {
             // get required env variables

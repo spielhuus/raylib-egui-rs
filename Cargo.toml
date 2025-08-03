@@ -4,23 +4,17 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-# egui = { version = "0.32.0" }
-# egui_extras = { version = "0.32.0", features = ["default", "image"] }
-# eframe = { version = "0.32", default-features = false, features = [
-#     "accesskit",     # Make egui compatible with screen readers. NOTE: adds a lot of dependencies.
-#     "default_fonts", # Embed the default egui fonts.
-#     "glow",          # Use the glow rendering backend. Alternative: "wgpu".
-#     "persistence",   # Enable restoring app state when restarting the app.
-#     "wayland",       # To support Linux (and CI)
-#     "x11",           # To support older Linux distributions (restores one of the default features)
-# ] }
+egui = { version = "0.32", features = ["default"] }
+egui_extras = { version = "0.32", features = ["default", "image"] }
 mint = "0.5.9"
-# env_logger = "0.11.8"
 
 [build-dependencies]
-cmake = "0.1.51"
-cc = "1.0"
+cmake = "0.1.54"
+cc = "1.2"
 bindgen = "0.72.0"
+
+[dev-dependencies]
+egui_demo_lib = "0.32"
 
 [features]
 # default features follow the cmake version: https://github.com/raysan5/raylib/wiki/CMake-Build-Options
